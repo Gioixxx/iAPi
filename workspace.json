@@ -1,0 +1,21 @@
+{
+    "name":  "iAPi",
+    "kit":  "fastapi",
+    "stack":  "fastapi",
+    "claudeLibsVersion":  "1.27.0",
+    "buildCommand":  "docker build .",
+    "testCommand":  "pytest",
+    "githubRepo":  "Gioixxx/iAPi",
+    "createdAt":  "2026-07-16",
+    "features":  {
+                     "memoryOllama":  true,
+                     "libraryRouter":  true,
+                     "enforcementHooks":  true
+                 },
+    "modules":  [
+                    "stacks/fastapi.md",
+                    "snippets/fastapi-patterns.md",
+                    "stacks/docker.md",
+                    "stacks/ai-integration.md"
+                ]
+}

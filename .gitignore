@@ -1,0 +1,19 @@
+
+ralph/run-state.json
+
+.claude/memory-sync.log
+
+.ralph-worktrees/
+
+.claude/libs-ext/
+
+# iAPi — Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# iAPi — deploy secrets (docker-compose.yml/.env.example restano tracciati)
+deploy/.env
