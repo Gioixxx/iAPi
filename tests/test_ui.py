@@ -5,7 +5,7 @@ async def test_index_serves_the_browser_ui(api_client):
     assert resp.headers["content-type"].startswith("text/html")
     assert resp.headers["cache-control"] == "no-cache"
     # The page calls the API with relative URLs, so it works under any host/port.
-    assert 'fetch("generate"' in resp.text
+    assert 'fetch("generate/stream"' in resp.text
     assert 'fetch("health"' in resp.text
 
 

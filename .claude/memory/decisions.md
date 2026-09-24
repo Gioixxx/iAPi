@@ -141,3 +141,26 @@ Registro scelte tecniche con motivazioni.
   L'output del modello è mostrato con `textContent`, mai come HTML. `Cache-Control: no-cache`
   perché un aggiornamento di Watchtower si veda al primo reload.
 - **Impatto:** `app/web/index.html`, `app/api/endpoints/ui.py`, `tests/test_ui.py`.
+
+### Streaming su `/generate/stream` in NDJSON, con il primo evento atteso prima del 200
+- **Data:** 2026-09-24
+- **Decisione:** endpoint separato `POST /generate/stream` (`/generate` invariato per i client
+  esistenti). Risposta NDJSON con eventi `delta` / `done` / `error` (schemi Pydantic
+  `StreamDelta`, `StreamDone`, `StreamError`). I client espongono `generate_stream()`, un async
+  generator che emette `TextDelta` e poi un solo `GenerationResult`. Il service attende il
+  **primo** evento prima di restituire la `StreamingResponse`.
+- **Perché:** sul Pi la risposta completa richiede 8-20 s; in streaming la prima parola arriva in
+  pochi secondi. NDJSON e non SSE: la pagina usa `fetch` con POST (EventSource fa solo GET) e da
+  Python basta `iter_lines()`. Attendere il primo evento fa sì che backend giù o modello
+  mancante rispondano con il loro status vero (502/503) invece di un 200 con dentro un errore;
+  gli errori a metà diventano una riga `error`, perché lo status è già partito.
+- **Dettagli che contano:** LM Studio manda `usage` solo con
+  `stream_options.include_usage` (in un chunk a parte, con `choices` vuoto, prima di `[DONE]`).
+  Alla disconnessione del client Starlette annulla il task (cancel scope di anyio): la chiusura
+  dello stream verso il backend sta in un `finally` sotto `CancelScope(shield=True)`, altrimenti
+  la cancellazione interromperebbe anche quella. L'oggetto dell'email si riconosce anche con il
+  grassetto markdown (`**Oggetto:**`), che i modelli a volte aggiungono nonostante le istruzioni.
+- **Impatto:** `app/ai/{base,lmstudio_client,ollama_client}.py`,
+  `app/ai/services/generate_service.py`, `app/api/endpoints/generate.py`,
+  `app/schemas/generate.py`, `app/web/index.html`.
+

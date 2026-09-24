@@ -29,6 +29,13 @@ deve dipendere da quale dei due ha risposto per primo.
   cortesi in italiano."). Ritorna `503` finché il modello non è stato ancora scaricato, `504` su
   timeout upstream, `502` per gli altri errori del backend — incluso il caso in cui un modello
   "reasoning" consuma tutto `max_tokens` a ragionare senza scrivere la risposta.
+- `POST /generate/stream` — stessa richiesta di `/generate`, risposta in streaming
+  (`application/x-ndjson`, un evento per riga): tanti `{"type": "delta", "text": "..."}` man mano
+  che il modello scrive, poi un `{"type": "done", ...}` con gli stessi campi di `/generate`,
+  oppure un `{"type": "error", "status", "detail"}` se il modello si interrompe a metà. Gli errori
+  prima del primo pezzo (modello non pronto, backend giù) hanno il loro status HTTP vero,
+  `503`/`502`/`504`. Chiudere la connessione ferma anche la generazione sul backend. È quello
+  che usa l'interfaccia web.
 
 Il download del modello è automatico al primo avvio del gateway (background task, non blocca lo
 startup) e si ripete da solo se il modello dovesse sparire (es. volume resettato) — con Ollama

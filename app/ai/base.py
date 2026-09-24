@@ -1,4 +1,4 @@
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -33,6 +33,18 @@ class GenerationResult:
     total_duration_ms: int | None = None
 
 
+@dataclass(frozen=True)
+class TextDelta:
+    """A piece of generated text, as soon as the backend produces it."""
+
+    text: str
+
+
+# What generate_stream yields: any number of TextDelta, then exactly one GenerationResult
+# carrying the full text and the stats — or an LLMError raised instead of the result.
+StreamEvent = TextDelta | GenerationResult
+
+
 class LLMClient(Protocol):
     """What the gateway needs from a backend. Implementations translate their own API and
     error shapes into these types, so readiness and services never see provider details."""
@@ -54,3 +66,16 @@ class LLMClient(Protocol):
         temperature: float | None = None,
         max_tokens: int | None = None,
     ) -> GenerationResult: ...
+
+    def generate_stream(
+        self,
+        prompt: str,
+        model: str,
+        *,
+        system: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> AsyncGenerator[StreamEvent, None]:
+        """Same request as generate(), streamed. Closing the iterator early closes the
+        connection to the backend, which stops the generation there too."""
+        ...

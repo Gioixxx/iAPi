@@ -1,7 +1,8 @@
 import asyncio
+import json
 import logging
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
 from typing import Any
 
 import httpx
@@ -13,6 +14,8 @@ from app.ai.base import (
     LLMModelMissingError,
     LLMTimeoutError,
     LLMUnavailableError,
+    StreamEvent,
+    TextDelta,
 )
 
 logger = logging.getLogger(__name__)
@@ -118,6 +121,53 @@ class LMStudioClient:
             self._raise_for_status(resp)
             status = resp.json()
 
+    def _chat_payload(
+        self,
+        prompt: str,
+        model: str,
+        system: str | None,
+        temperature: float | None,
+        max_tokens: int | None,
+        *,
+        stream: bool,
+    ) -> dict[str, Any]:
+        messages = [{"role": "user", "content": prompt}]
+        if system is not None:
+            messages.insert(0, {"role": "system", "content": system})
+
+        payload: dict[str, Any] = {"model": model, "messages": messages, "stream": stream}
+        if stream:
+            # Without it the OpenAI stream carries no token counts.
+            payload["stream_options"] = {"include_usage": True}
+        if temperature is not None:
+            payload["temperature"] = temperature
+        if max_tokens is not None:
+            payload["max_tokens"] = max_tokens
+        if self._reasoning_effort:
+            payload["reasoning_effort"] = self._reasoning_effort
+        return payload
+
+    def _check_chat_status(self, resp: httpx.Response, model: str) -> None:
+        if resp.status_code == 400 and _error_detail(resp).get("param") == "model":
+            raise LLMModelMissingError(f"model not available on LM Studio: {model}")
+        self._raise_for_status(resp)
+
+    @staticmethod
+    def _reasoning_starved(model: str) -> LLMEmptyResponseError:
+        return LLMEmptyResponseError(
+            f"'{model}' spent the whole max_tokens budget reasoning and wrote no answer: "
+            "raise max_tokens or disable reasoning (LMSTUDIO_REASONING_EFFORT=none)"
+        )
+
+    @staticmethod
+    def _served_model(served: str | None, requested: str) -> str:
+        # With a single model loaded, LM Studio answers with it even when the request names
+        # another one — surface the substitution instead of reporting the requested name.
+        served = served or requested
+        if served != requested:
+            logger.warning("LM Studio served %r instead of the requested %r", served, requested)
+        return served
+
     async def generate(
         self,
         prompt: str,
@@ -127,25 +177,12 @@ class LMStudioClient:
         temperature: float | None = None,
         max_tokens: int | None = None,
     ) -> GenerationResult:
-        messages = [{"role": "user", "content": prompt}]
-        if system is not None:
-            messages.insert(0, {"role": "system", "content": system})
-
-        payload: dict[str, Any] = {"model": model, "messages": messages, "stream": False}
-        if temperature is not None:
-            payload["temperature"] = temperature
-        if max_tokens is not None:
-            payload["max_tokens"] = max_tokens
-        if self._reasoning_effort:
-            payload["reasoning_effort"] = self._reasoning_effort
+        payload = self._chat_payload(prompt, model, system, temperature, max_tokens, stream=False)
 
         started = time.perf_counter()
         resp = await self._send("POST", "/v1/chat/completions", json=payload)
         elapsed_ms = round((time.perf_counter() - started) * 1000)
-
-        if resp.status_code == 400 and _error_detail(resp).get("param") == "model":
-            raise LLMModelMissingError(f"model not available on LM Studio: {model}")
-        self._raise_for_status(resp)
+        self._check_chat_status(resp, model)
 
         data = resp.json()
         choices = data.get("choices") or []
@@ -159,21 +196,70 @@ class LMStudioClient:
             and choice.get("finish_reason") == "length"
             and message.get("reasoning_content")
         ):
-            raise LLMEmptyResponseError(
-                f"'{model}' spent the whole max_tokens budget reasoning and wrote no answer: "
-                "raise max_tokens or disable reasoning (LMSTUDIO_REASONING_EFFORT=none)"
-            )
-
-        # With a single model loaded, LM Studio answers with it even when the request names
-        # another one — surface the substitution instead of reporting the requested name.
-        served_model = data.get("model") or model
-        if served_model != model:
-            logger.warning("LM Studio served %r instead of the requested %r", served_model, model)
+            raise self._reasoning_starved(model)
 
         usage = data.get("usage") or {}
         return GenerationResult(
             text=text,
-            model=served_model,
+            model=self._served_model(data.get("model"), model),
             eval_count=usage.get("completion_tokens"),
             total_duration_ms=elapsed_ms,
+        )
+
+    async def generate_stream(
+        self,
+        prompt: str,
+        model: str,
+        *,
+        system: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> AsyncGenerator[StreamEvent, None]:
+        """Parses the SSE stream of /v1/chat/completions: `data: {chunk}` lines, a chunk with
+        the finish_reason, one with `usage` and empty choices, then `data: [DONE]`."""
+        payload = self._chat_payload(prompt, model, system, temperature, max_tokens, stream=True)
+        parts: list[str] = []
+        reasoned = False
+        finish_reason: str | None = None
+        served: str | None = None
+        usage: dict[str, Any] = {}
+
+        started = time.perf_counter()
+        try:
+            async with self._http.stream("POST", "/v1/chat/completions", json=payload) as resp:
+                if resp.is_error:
+                    await resp.aread()
+                    self._check_chat_status(resp, model)
+                async for line in resp.aiter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    data = line.removeprefix("data:").strip()
+                    if data == "[DONE]":
+                        break
+                    try:
+                        chunk = json.loads(data)
+                    except json.JSONDecodeError:
+                        logger.warning("skipping malformed stream line: %r", line)
+                        continue
+                    served = chunk.get("model") or served
+                    usage = chunk.get("usage") or usage
+                    for choice in chunk.get("choices") or []:
+                        delta = choice.get("delta") or {}
+                        reasoned = reasoned or bool(delta.get("reasoning_content"))
+                        finish_reason = choice.get("finish_reason") or finish_reason
+                        if text := delta.get("content"):
+                            parts.append(text)
+                            yield TextDelta(text)
+        except httpx.TimeoutException as exc:
+            raise LLMTimeoutError(str(exc)) from exc
+        except httpx.HTTPError as exc:
+            raise LLMUnavailableError(str(exc)) from exc
+
+        if not parts and finish_reason == "length" and reasoned:
+            raise self._reasoning_starved(model)
+        yield GenerationResult(
+            text="".join(parts),
+            model=self._served_model(served, model),
+            eval_count=usage.get("completion_tokens"),
+            total_duration_ms=round((time.perf_counter() - started) * 1000),
         )

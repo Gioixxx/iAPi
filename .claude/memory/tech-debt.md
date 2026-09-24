@@ -27,16 +27,6 @@ Registro debito tecnico con priorità. Aggiornato da /session-end. Origine spess
 - **Impatto:** nessun altro può rilasciare, nessuna verifica automatica pre-release.
 - **Risoluzione:** GitHub Actions con `docker/build-push-action` multi-arch, se serve in futuro.
 
-### /generate non supporta streaming
-- **Priorità:** Bassa
-- **Area:** app/api/endpoints/generate.py
-- **Data:** 2026-07-16
-- **Descrizione:** risposta singola JSON dopo il completamento, niente SSE/NDJSON.
-- **Perché rimandato:** i chiamanti attuali sono altri servizi backend (machine-to-machine), non
-  serve ancora latenza token-by-token.
-- **Impatto:** basso oggi; da rivedere se arriva un consumer chat-UI-style.
-- **Risoluzione:** endpoint `/generate/stream` separato, senza toccare quello esistente.
-
 ### `--workers 1` hardcoded nel Dockerfile
 - **Priorità:** Bassa
 - **Area:** Dockerfile / app/core/readiness.py
@@ -60,7 +50,7 @@ Registro debito tecnico con priorità. Aggiornato da /session-end. Origine spess
 ## Priorità
 - **Alta:** —
 - **Media:** nessuna auth su /generate e /health
-- **Bassa:** niente CI/CD, no streaming, `--workers 1`, tag Ollama pinnato a mano
+- **Bassa:** niente CI/CD, `--workers 1`, tag Ollama pinnato a mano
 
 ## Archiviato
 - [item risolti]
@@ -69,3 +59,5 @@ Registro debito tecnico con priorità. Aggiornato da /session-end. Origine spess
   creabile in headless, quindi non era un'opzione.
 - **2026-09-24 — `reasoning_effort: "none"` forse ignorato su `/v1`.** Verificato sul Pi con
   gemma-4-e2b: 0 reasoning token. Se si cambia modello va ricontrollato (bug LM Studio #988, #2413).
+- **2026-09-24 — `/generate` non supportava lo streaming.** Aggiunto `/generate/stream` (NDJSON)
+  accanto a `/generate`, che resta invariato; l'interfaccia web lo usa. Vedi [[decisions]].

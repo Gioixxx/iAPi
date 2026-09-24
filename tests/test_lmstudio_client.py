@@ -6,11 +6,13 @@ import respx
 from httpx import Response
 
 from app.ai.base import (
+    GenerationResult,
     LLMEmptyResponseError,
     LLMError,
     LLMModelMissingError,
     LLMTimeoutError,
     LLMUnavailableError,
+    TextDelta,
 )
 from app.ai.lmstudio_client import LMStudioClient
 from tests.conftest import LMSTUDIO_BASE_URL, LMSTUDIO_MODEL
@@ -229,3 +231,74 @@ async def test_generate_timeout_raises(lmstudio_client):
         respx.post(CHAT_URL).mock(side_effect=httpx.ReadTimeout("timed out"))
         with pytest.raises(LLMTimeoutError):
             await lmstudio_client.generate("Hi", LMSTUDIO_MODEL)
+
+
+def _sse(*chunks: dict) -> bytes:
+    lines = [f"data: {json.dumps(chunk)}\n\n" for chunk in chunks]
+    return ("".join(lines) + "data: [DONE]\n\n").encode()
+
+
+def _chunk(content: str | None = None, *, finish_reason=None, **delta_extra) -> dict:
+    delta = {**delta_extra}
+    if content is not None:
+        delta["content"] = content
+    return {
+        "model": LMSTUDIO_MODEL,
+        "choices": [{"index": 0, "delta": delta, "finish_reason": finish_reason}],
+    }
+
+
+async def test_generate_stream_yields_deltas_then_result(lmstudio_client):
+    body = _sse(
+        _chunk("Ciao", role="assistant"),
+        _chunk(" Marco"),
+        _chunk(finish_reason="stop"),
+        {"model": LMSTUDIO_MODEL, "choices": [], "usage": {"completion_tokens": 7}},
+    )
+    with respx.mock:
+        route = respx.post(CHAT_URL).mock(return_value=Response(200, content=body))
+        events = [
+            e
+            async for e in lmstudio_client.generate_stream(
+                "Hi", LMSTUDIO_MODEL, system="Sii breve."
+            )
+        ]
+
+    payload = json.loads(route.calls.last.request.content)
+    assert payload["stream"] is True
+    assert payload["stream_options"] == {"include_usage": True}
+    assert payload["messages"][0] == {"role": "system", "content": "Sii breve."}
+    assert events[:2] == [TextDelta("Ciao"), TextDelta(" Marco")]
+    result = events[2]
+    assert isinstance(result, GenerationResult)
+    assert result.text == "Ciao Marco"
+    assert result.model == LMSTUDIO_MODEL
+    assert result.eval_count == 7
+    assert result.total_duration_ms is not None
+    assert len(events) == 3
+
+
+async def test_generate_stream_reasoning_starved_raises(lmstudio_client):
+    body = _sse(
+        _chunk(reasoning_content="Okay, the user"),
+        _chunk(finish_reason="length"),
+    )
+    with respx.mock:
+        respx.post(CHAT_URL).mock(return_value=Response(200, content=body))
+        with pytest.raises(LLMEmptyResponseError, match="max_tokens"):
+            [e async for e in lmstudio_client.generate_stream("Hi", LMSTUDIO_MODEL)]
+
+
+async def test_generate_stream_unknown_model_raises_missing(lmstudio_client):
+    error = {"error": {"message": "No models loaded.", "param": "model"}}
+    with respx.mock:
+        respx.post(CHAT_URL).mock(return_value=Response(400, json=error))
+        with pytest.raises(LLMModelMissingError):
+            [e async for e in lmstudio_client.generate_stream("Hi", LMSTUDIO_MODEL)]
+
+
+async def test_generate_stream_unreachable_raises(lmstudio_client):
+    with respx.mock:
+        respx.post(CHAT_URL).mock(side_effect=httpx.ConnectError("connection refused"))
+        with pytest.raises(LLMUnavailableError):
+            [e async for e in lmstudio_client.generate_stream("Hi", LMSTUDIO_MODEL)]

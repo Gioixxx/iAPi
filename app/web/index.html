@@ -388,8 +388,8 @@
         <p class="notice" id="notice" role="alert" hidden></p>
         <p class="subject" id="subject" hidden>Oggetto: <strong id="subject-text"></strong></p>
         <div class="letter-empty" id="letter-empty">
-          <p>Descrivi in una o due frasi cosa vuoi dire e a chi. Il testo pronto da copiare apparirà qui.</p>
-          <p>Di solito ci vogliono tra 5 e 20 secondi: il modello gira sul Raspberry, senza cloud.</p>
+          <p>Descrivi in una o due frasi cosa vuoi dire e a chi. Il testo apparirà qui mentre il modello lo scrive, pronto da copiare.</p>
+          <p>Le prime parole arrivano in pochi secondi: il modello gira sul Raspberry, senza cloud.</p>
         </div>
         <p class="letter-body" id="letter-body" hidden aria-live="polite"></p>
         <p class="letter-meta" id="letter-meta" hidden></p>
@@ -631,7 +631,8 @@ async function checkHealth() {
 
 /* ---------- generation ---------- */
 function splitSubject(text) {
-  const match = text.match(/^\s*oggetto\s*:\s*(.+)\n+/i);
+  // Tolerates markdown emphasis the model sometimes adds anyway: "**Oggetto:** ...".
+  const match = text.match(/^[\s*_#]*oggetto[*_]*\s*:[\s*_]*(.+?)[\s*_]*\n+/i);
   if (!match) return { subject: "", body: text.trim() };
   return { subject: match[1].trim(), body: text.slice(match[0].length).trim() };
 }
@@ -645,14 +646,28 @@ function showNotice(message) {
   els.notice.hidden = !message;
 }
 
-function showLetter(entry) {
-  const { subject, body } = splitSubject(entry.text);
-  state.current = { ...entry, subject, body };
+function renderText(text) {
+  const { subject, body } = splitSubject(text);
   els.empty.hidden = true;
   els.body.hidden = false;
-  els.body.textContent = body || "Il modello ha risposto senza testo. Prova a riscrivere.";
+  els.body.textContent = body;
   els.subject.hidden = !subject;
   els.subjectText.textContent = subject;
+  return { subject, body };
+}
+
+function startLetter() {
+  state.current = null;
+  renderText("");
+  els.letterActions.hidden = true;
+  els.meta.hidden = false;
+  els.meta.textContent = "Il modello sta leggendo la richiesta…";
+}
+
+function showLetter(entry) {
+  const { subject, body } = renderText(entry.text);
+  state.current = { ...entry, subject, body };
+  if (!body) els.body.textContent = "Il modello ha risposto senza testo. Prova a riscrivere.";
   els.meta.hidden = false;
   els.meta.textContent = entry.ms != null
     ? `Scritto in ${formatSeconds(entry.ms)} da ${entry.model}`
@@ -708,6 +723,33 @@ function setWriting(on) {
   }
 }
 
+/* /generate/stream answers with NDJSON: {"type":"delta","text"} lines, then one
+   {"type":"done", ...} or one {"type":"error","status","detail"}. */
+async function readStream(res, onDelta) {
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let end = null;
+  const handle = (line) => {
+    if (!line.trim()) return;
+    const event = JSON.parse(line);
+    if (event.type === "delta") onDelta(event.text);
+    else end = event;
+  };
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let newline;
+    while ((newline = buffer.indexOf("\n")) >= 0) {
+      handle(buffer.slice(0, newline));
+      buffer = buffer.slice(newline + 1);
+    }
+  }
+  handle(buffer + decoder.decode());
+  return end;
+}
+
 async function write() {
   if (state.controller) return;
   const built = buildPrompt();
@@ -732,32 +774,50 @@ async function write() {
 
   state.controller = new AbortController();
   setWriting(true);
+  startLetter();
   const started = Date.now();
+  let text = "";
   try {
-    const res = await fetch("generate", {
+    const res = await fetch("generate/stream", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(request),
       signal: state.controller.signal,
     });
-    const data = await res.json().catch(() => null);
     if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      els.meta.hidden = true;
       showNotice(errorMessage(res.status, data));
       if (res.status === 503 || res.status === 502) checkHealth();
       return;
     }
-    const entry = {
-      ...inputs,
-      text: data.response,
-      model: data.model,
-      ms: data.total_duration_ms ?? Date.now() - started,
-      at: Date.now(),
-    };
-    showLetter(entry);
-    addToHistory(entry);
+    const end = await readStream(res, (delta) => {
+      if (!text) els.meta.textContent = "Sto scrivendo…";
+      text += delta;
+      renderText(text);
+    });
+    if (end && end.type === "done") {
+      const entry = {
+        ...inputs,
+        text: end.response,
+        model: end.model,
+        ms: end.total_duration_ms ?? Date.now() - started,
+        at: Date.now(),
+      };
+      showLetter(entry);
+      addToHistory(entry);
+    } else if (end && end.type === "error") {
+      els.meta.textContent = "Testo incompleto";
+      showNotice(errorMessage(end.status, { detail: end.detail }));
+    } else {
+      els.meta.textContent = "Testo incompleto";
+      showNotice("La risposta si è interrotta prima della fine. Riprova.");
+    }
   } catch (err) {
+    els.meta.textContent = text ? "Testo incompleto" : "";
+    els.meta.hidden = !text;
     if (err.name === "AbortError") {
-      showNotice("Richiesta annullata. Il Raspberry potrebbe finire di scriverla in background e rallentare per qualche secondo la prossima.");
+      showNotice("Richiesta annullata: il Raspberry ha smesso di scrivere.");
     } else {
       showNotice("Il gateway non risponde. Controlla che il Raspberry sia acceso e in rete.");
       checkHealth();
