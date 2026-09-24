@@ -43,6 +43,10 @@ if [ -z "$BIND_IP" ]; then
 fi
 echo "Bind del server: $BIND_IP:$PORT"
 
+# L'installer di LM Studio cerca ldconfig nel PATH, ma su Debian sta in /usr/sbin, che non è
+# nel PATH di un utente normale: senza questo si ferma con "ldconfig must be available".
+export PATH="$PATH:/usr/sbin:/sbin"
+
 if [ ! -x "$LMS" ]; then
   echo "== Installazione di LM Studio (llmster)"
   curl -fsSL https://lmstudio.ai/install.sh | bash
