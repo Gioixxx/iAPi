@@ -26,6 +26,10 @@ Stato lavoro in corso. Aggiornato con /sprint. Backlog in [[backlog]], debito in
   pubblicata e in esecuzione sul Pi (digest `8bf48f85`). Email con le istruzioni della pagina:
   ~22 s alla prima richiesta con istruzioni nuove, ~8,5 s dopo (cache del prompt di LM Studio)
 - [x] gemma-4-e2b rispetta `reasoning_effort: none` (0 reasoning token)
+- [x] Streaming: `/generate/stream` (NDJSON) + interfaccia che mostra il testo mentre arriva —
+  `8c87bc6`, immagine `0.4.0` sul Pi (digest `7f5d6f86`). Prima parola in 0,9 s, email intera
+  ~8,7 s. Verificato che chiudere la connessione ferma la generazione su LM Studio (CPU del Pi
+  da ~80% a riposo subito dopo la chiusura)
 
 ## Storico
 ### v1 — Gateway FastAPI + Ollama su Raspberry Pi 5
