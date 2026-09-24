@@ -110,3 +110,20 @@ Registro scelte tecniche con motivazioni.
   è raggiungibile via SSH da Claude Code (solo tramite l'MCP `pi-deploy`, che non esegue comandi
   arbitrari): lo script lo lancia l'utente.
 - **Impatto:** `deploy/lmstudio/install-llmster.sh`, `.gitattributes` (`*.sh` in LF).
+
+### Avvio di llmster tramite script con retry, non `ExecStartPre` separate
+- **Data:** 2026-09-24
+- **Decisione:** la unit `lmstudio.service` esegue `/usr/local/bin/iapi-lmstudio-start` (generato
+  da `install-llmster.sh`), che lancia `daemon up`, `load` e `server start` ognuno dentro un retry
+  (30 tentativi, 2 s). Lo stesso retry avvolge i comandi `lms` dello script di installazione.
+- **Perché:** a ogni avvio llmster **riscrive** `~/.lmstudio/bin/lms` (mtime cambia a ogni
+  `daemon up`, verificato con `stat`); eseguirlo in quell'istante fallisce con `Text file busy`
+  (ETXTBSY). Ha fatto fallire sia il primo `lms get` dello script (unit mai creata) sia
+  `lms load` nella unit (`status=203/EXEC`). A mano non si vede: tra un comando e l'altro passa
+  abbastanza tempo. Lo script separato evita anche l'escaping di `$` richiesto da systemd.
+- **Misurato sul Pi (gemma-4-e2b Q4_K_M, contesto 8192, solo CPU):** avvio del servizio 15 s
+  (load 8 s, 4,11 GiB); ~5,5 tok/s in generazione; email breve (32-37 token) **6-7 s** a caldo,
+  12 s alla prima richiesta dopo il load. `reasoning_effort: "none"` rispettato (0 reasoning
+  token). Senza istruzioni il modello propone 3 versioni dell'email (~200 token, 36 s): il
+  `system` deve chiedere una sola email.
+- **Impatto:** `deploy/lmstudio/install-llmster.sh`.

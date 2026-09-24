@@ -57,25 +57,15 @@ Registro debito tecnico con priorità. Aggiornato da /session-end. Origine spess
 - **Impatto:** minimo — si nota solo se serve una feature/fix di una versione più recente.
 - **Risoluzione:** aggiornare `OLLAMA_IMAGE_TAG` in `deploy/.env` a mano quando serve.
 
-### `reasoning_effort: "none"` non è rispettato da tutti i modelli su `/v1`
-- **Priorità:** Bassa
-- **Area:** app/ai/lmstudio_client.py
-- **Data:** 2026-09-24
-- **Descrizione:** bug noti di LM Studio (lmstudio-bug-tracker #988, #2413) su alcuni modelli
-  ignorano il campo sull'endpoint OpenAI-compatibile; funziona sulla REST nativa `/api/v1/chat`.
-- **Perché rimandato:** verificato funzionante su qwen3-0.6b; gemma-4-e2b non ancora provato.
-- **Impatto:** risposte più lente e, con `max_tokens` basso, 502 da reasoning che consuma il budget.
-- **Risoluzione:** se succede col modello scelto, passare la generazione a `/api/v1/chat` con
-  reasoning off, lasciando invariato il resto del client.
-
 ## Priorità
 - **Alta:** —
 - **Media:** nessuna auth su /generate e /health
-- **Bassa:** niente CI/CD, no streaming, `--workers 1`, tag Ollama pinnato a mano,
-  `reasoning_effort` ignorato da alcuni modelli
+- **Bassa:** niente CI/CD, no streaming, `--workers 1`, tag Ollama pinnato a mano
 
 ## Archiviato
 - [item risolti]
 - **2026-09-24 — LM Studio sul Pi esposto oltre localhost.** Risolto prima del deploy:
   llmster ascolta solo sull'IP di `docker0` (vedi [[decisions]]); il token API non è
   creabile in headless, quindi non era un'opzione.
+- **2026-09-24 — `reasoning_effort: "none"` forse ignorato su `/v1`.** Verificato sul Pi con
+  gemma-4-e2b: 0 reasoning token. Se si cambia modello va ricontrollato (bug LM Studio #988, #2413).
