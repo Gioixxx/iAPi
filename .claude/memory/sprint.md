@@ -22,7 +22,9 @@ Stato lavoro in corso. Aggiornato con /sprint. Backlog in [[backlog]], debito in
 - [x] Unit `lmstudio.service` installata e attiva (enabled, riparte al boot), gateway `ready`
 - [x] Build + push `ghcr.io/gioixxx/iapi:0.2.0`/`:latest`
 - [x] `deploy_app` con `LLM_PROVIDER=lmstudio`: `/health` ready, email in 6-7 s a caldo
-- [ ] Immagine con il log di raggiungibilità (`4d64e0f`), non ancora pubblicata
+- [x] Interfaccia web su `GET /` (`a250deb`) + log di raggiungibilità: immagine `0.3.0`
+  pubblicata e in esecuzione sul Pi (digest `8bf48f85`). Email con le istruzioni della pagina:
+  ~22 s alla prima richiesta con istruzioni nuove, ~8,5 s dopo (cache del prompt di LM Studio)
 - [x] gemma-4-e2b rispetta `reasoning_effort: none` (0 reasoning token)
 
 ## Storico
