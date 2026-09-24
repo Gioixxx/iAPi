@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>iAPi</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='7' width='28' height='18' rx='2' fill='%23fff' stroke='%232B4C9A' stroke-width='2'/%3E%3Cpath d='M3 8l13 10L29 8' fill='none' stroke='%23C8313E' stroke-width='2'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --paper: #F3F5F9;
+    --sheet: #FFFFFF;
+    --ink: #1B2A4A;
+    --ink-soft: #56617A;
+    --line: #D6DCE7;
+    --field: #FFFFFF;
+    --air-red: #C8313E;
+    --air-blue: #2B4C9A;
+    --air-blue-strong: #213C7C;
+    --ok: #2E7D4F;
+    --warn: #A86A12;
+    --bad: #B42D3A;
+    --serif: "Charter", "Bitstream Charter", "Sitka Text", Cambria, Georgia, serif;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #10141D;
+      --sheet: #182030;
+      --ink: #E3E8F2;
+      --ink-soft: #9CA6BB;
+      --line: #2C3549;
+      --field: #131A27;
+      --air-red: #E25A6C;
+      --air-blue: #7393E6;
+      --air-blue-strong: #8FA9F0;
+      --ok: #5FBF86;
+      --warn: #E0A64A;
+      --bad: #EE7482;
+      color-scheme: dark;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  /* Components below set display: flex/grid, which would otherwise beat the hidden attribute. */
+  [hidden] { display: none !important; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font: 16px/1.5 var(--sans);
+  }
+  button, input, textarea, select { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid var(--air-blue); outline-offset: 2px; }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 18px 24px 0;
+  }
+  .wordmark {
+    font: 700 1.25rem/1 var(--serif);
+    letter-spacing: 0.01em;
+    margin: 0;
+  }
+  .status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.875rem;
+    color: var(--ink-soft);
+    text-align: right;
+  }
+  .status-dot {
+    flex: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--ink-soft);
+  }
+  .status[data-state="ready"] .status-dot { background: var(--ok); }
+  .status[data-state="busy"] .status-dot { background: var(--warn); }
+  .status[data-state="down"] .status-dot { background: var(--bad); }
+
+  main {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+    grid-template-areas: "composer letter" "history letter";
+    column-gap: 40px;
+    row-gap: 28px;
+    align-items: start;
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 28px 24px 48px;
+  }
+
+  /* Composer */
+  .composer { grid-area: composer; }
+  .composer h1 {
+    font: 400 2.25rem/1.15 var(--serif);
+    margin: 0 0 24px;
+  }
+  fieldset { border: 0; margin: 0 0 20px; padding: 0; min-width: 0; }
+  legend, .field-label {
+    display: block;
+    font-weight: 600;
+    font-size: 0.9375rem;
+    margin-bottom: 8px;
+    padding: 0;
+  }
+  .choices { display: flex; flex-wrap: wrap; gap: 8px; }
+  .choice { position: relative; }
+  .choice input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+  .choice span {
+    display: inline-block;
+    padding: 7px 14px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--field);
+    font-size: 0.9375rem;
+    cursor: pointer;
+    user-select: none;
+  }
+  .choice input:checked + span {
+    background: var(--air-blue);
+    border-color: var(--air-blue);
+    color: #fff;
+  }
+  @media (prefers-color-scheme: dark) {
+    .choice input:checked + span { color: #0E1422; }
+  }
+  .choice input:focus-visible + span { outline: 3px solid var(--air-blue); outline-offset: 2px; }
+
+  .field { margin-bottom: 20px; }
+  textarea {
+    display: block;
+    width: 100%;
+    min-height: 96px;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--field);
+    resize: vertical;
+    line-height: 1.5;
+  }
+  textarea.tall { min-height: 150px; }
+  textarea:focus { border-color: var(--air-blue); }
+  .hint { margin: 6px 0 0; font-size: 0.8125rem; color: var(--ink-soft); }
+
+  details.advanced {
+    margin: 4px 0 24px;
+    border-top: 1px solid var(--line);
+    padding-top: 12px;
+  }
+  details.advanced summary {
+    cursor: pointer;
+    font-size: 0.9375rem;
+    color: var(--ink-soft);
+  }
+  details.advanced[open] summary { margin-bottom: 16px; }
+  .range-row { display: flex; align-items: center; gap: 12px; }
+  .range-row input[type="range"] { flex: 1; accent-color: var(--air-blue); }
+  .range-row output { min-width: 3.5em; text-align: right; font-variant-numeric: tabular-nums; }
+  .link-button {
+    border: 0;
+    background: none;
+    padding: 0;
+    color: var(--air-blue);
+    text-decoration: underline;
+    cursor: pointer;
+    font-size: 0.8125rem;
+  }
+
+  .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 0 20px;
+    border-radius: 8px;
+    border: 1px solid var(--air-blue);
+    background: transparent;
+    color: var(--air-blue);
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+  }
+  .btn-primary { background: var(--air-blue); color: #fff; min-width: 140px; }
+  .btn-primary:hover { background: var(--air-blue-strong); border-color: var(--air-blue-strong); }
+  @media (prefers-color-scheme: dark) {
+    .btn-primary { color: #0E1422; }
+  }
+  .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+  .shortcut { font-size: 0.8125rem; color: var(--ink-soft); }
+
+  /* Letter: the airmail edge is the one loud element on the page */
+  .letter-column { grid-area: letter; position: sticky; top: 20px; }
+  .sheet {
+    padding: 9px;
+    border-radius: 6px;
+    background: repeating-linear-gradient(
+      135deg,
+      var(--air-red) 0 14px, var(--sheet) 14px 21px,
+      var(--air-blue) 21px 35px, var(--sheet) 35px 42px
+    );
+    background-size: 59.4px 59.4px;
+    box-shadow: 0 1px 2px rgba(27, 42, 74, 0.08), 0 12px 32px -12px rgba(27, 42, 74, 0.25);
+  }
+  .sheet.writing { animation: airmail 1.2s linear infinite; }
+  @keyframes airmail { to { background-position: 59.4px 0; } }
+  @media (prefers-reduced-motion: reduce) {
+    .sheet.writing { animation: none; }
+  }
+  .sheet-inner {
+    min-height: 420px;
+    padding: 28px 32px 24px;
+    border-radius: 2px;
+    background: var(--sheet);
+    display: flex;
+    flex-direction: column;
+  }
+  .subject {
+    font-size: 0.9375rem;
+    color: var(--ink-soft);
+    padding-bottom: 14px;
+    margin: 0 0 18px;
+    border-bottom: 1px solid var(--line);
+  }
+  .subject strong { color: var(--ink); font-weight: 600; }
+  .letter-body {
+    flex: 1;
+    margin: 0;
+    font: 1.125rem/1.7 var(--serif);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    max-width: 68ch;
+  }
+  .letter-empty {
+    flex: 1;
+    color: var(--ink-soft);
+    font: 1.0625rem/1.65 var(--serif);
+  }
+  .letter-empty p { margin: 0 0 10px; max-width: 46ch; }
+  .letter-meta {
+    margin: 20px 0 0;
+    font-size: 0.8125rem;
+    color: var(--ink-soft);
+  }
+  .letter-actions { margin-top: 16px; }
+  .notice {
+    margin: 0 0 16px;
+    padding: 12px 14px;
+    border-left: 4px solid var(--bad);
+    background: color-mix(in srgb, var(--bad) 9%, var(--sheet));
+    font-size: 0.9375rem;
+  }
+
+  /* History */
+  .history { grid-area: history; }
+  .history h2 { font: 400 1.25rem/1.3 var(--serif); margin: 0 0 10px; }
+  .history ol { list-style: none; margin: 0; padding: 0; }
+  .history li + li { border-top: 1px solid var(--line); }
+  .history li button {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 12px;
+    width: 100%;
+    padding: 10px 2px;
+    border: 0;
+    background: none;
+    text-align: left;
+    cursor: pointer;
+  }
+  .history .h-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .history .h-when { color: var(--ink-soft); font-size: 0.8125rem; font-variant-numeric: tabular-nums; }
+  .history-empty { color: var(--ink-soft); font-size: 0.9375rem; margin: 0; }
+  .history-footer { margin-top: 8px; }
+
+  .visually-hidden {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+
+  @media (max-width: 860px) {
+    main {
+      grid-template-columns: 1fr;
+      grid-template-areas: "composer" "letter" "history";
+      padding: 20px 16px 40px;
+    }
+    .topbar { padding: 14px 16px 0; }
+    .letter-column { position: static; }
+    .composer h1 { font-size: 1.875rem; margin-bottom: 18px; }
+    .sheet-inner { min-height: 260px; padding: 22px 20px 20px; }
+  }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <p class="wordmark">iAPi</p>
+  <p class="status" id="status" data-state="unknown" role="status" aria-live="polite">
+    <span class="status-dot" aria-hidden="true"></span>
+    <span id="status-text">Controllo il modello…</span>
+  </p>
+</header>
+
+<main>
+  <section class="composer" aria-labelledby="composer-title">
+    <h1 id="composer-title">Cosa vuoi scrivere?</h1>
+
+    <form id="form" novalidate>
+      <fieldset>
+        <legend class="visually-hidden">Tipo di testo</legend>
+        <div class="choices" id="modes"></div>
+      </fieldset>
+
+      <div class="field" id="source-field" hidden>
+        <label class="field-label" for="source" id="source-label"></label>
+        <textarea id="source" class="tall" maxlength="7000"></textarea>
+      </div>
+
+      <div class="field" id="topic-field">
+        <label class="field-label" for="topic" id="topic-label"></label>
+        <textarea id="topic" maxlength="4000"></textarea>
+      </div>
+
+      <fieldset id="tone-group">
+        <legend>Tono</legend>
+        <div class="choices" id="tones"></div>
+      </fieldset>
+
+      <fieldset id="length-group">
+        <legend>Lunghezza</legend>
+        <div class="choices" id="lengths"></div>
+      </fieldset>
+
+      <details class="advanced">
+        <summary>Opzioni avanzate</summary>
+        <div class="field">
+          <label class="field-label" for="system">Istruzioni per il modello</label>
+          <textarea id="system" class="tall" maxlength="8000"></textarea>
+          <p class="hint" id="system-hint">Si aggiornano da sole quando cambi tipo, tono o lunghezza.
+            <button type="button" class="link-button" id="system-reset" hidden>Torna alle istruzioni automatiche</button></p>
+        </div>
+        <div class="field">
+          <label class="field-label" for="temperature">Creatività</label>
+          <div class="range-row">
+            <input type="range" id="temperature" min="0" max="1.5" step="0.1" value="0.7">
+            <output for="temperature" id="temperature-out">0,7</output>
+          </div>
+          <p class="hint">Più bassa: testo prevedibile. Più alta: più varietà, a volte meno preciso.</p>
+        </div>
+        <div class="field">
+          <label class="field-label" for="max-tokens">Lunghezza massima della risposta</label>
+          <div class="range-row">
+            <input type="range" id="max-tokens" min="100" max="1500" step="50" value="400">
+            <output for="max-tokens" id="max-tokens-out">400</output>
+          </div>
+          <p class="hint">In token, circa ¾ di parola ciascuno. Sul Raspberry ogni 100 token costano circa 18 secondi.</p>
+        </div>
+      </details>
+
+      <div class="actions">
+        <button type="submit" class="btn btn-primary" id="write">Scrivi</button>
+        <button type="button" class="btn" id="cancel" hidden>Annulla</button>
+        <span class="shortcut" id="shortcut">oppure Ctrl+Invio</span>
+      </div>
+    </form>
+  </section>
+
+  <section class="history" aria-labelledby="history-title">
+    <h2 id="history-title">Scritti di recente</h2>
+    <ol id="history-list"></ol>
+    <p class="history-empty" id="history-empty">Qui compariranno i testi che scrivi, salvati solo in questo browser.</p>
+    <div class="history-footer"><button type="button" class="link-button" id="history-clear" hidden>Cancella la cronologia</button></div>
+  </section>
+
+  <section class="letter-column" aria-labelledby="letter-title">
+    <h2 id="letter-title" class="visually-hidden">Testo scritto</h2>
+    <div class="sheet" id="sheet">
+      <div class="sheet-inner">
+        <p class="notice" id="notice" role="alert" hidden></p>
+        <p class="subject" id="subject" hidden>Oggetto: <strong id="subject-text"></strong></p>
+        <div class="letter-empty" id="letter-empty">
+          <p>Descrivi in una o due frasi cosa vuoi dire e a chi. Il testo pronto da copiare apparirà qui.</p>
+          <p>Di solito ci vogliono tra 5 e 20 secondi: il modello gira sul Raspberry, senza cloud.</p>
+        </div>
+        <p class="letter-body" id="letter-body" hidden aria-live="polite"></p>
+        <p class="letter-meta" id="letter-meta" hidden></p>
+        <div class="actions letter-actions" id="letter-actions" hidden>
+          <button type="button" class="btn" id="copy">Copia il testo</button>
+          <button type="button" class="btn" id="copy-subject" hidden>Copia l'oggetto</button>
+          <a class="btn" id="mailto" hidden>Apri nell'app di posta</a>
+          <button type="button" class="btn" id="rewrite">Riscrivi</button>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+"use strict";
+
+const MAX_PROMPT_CHARS = 8000;
+const HISTORY_KEY = "iapi.history.v1";
+const PREFS_KEY = "iapi.prefs.v1";
+const HISTORY_SIZE = 10;
+
+const BASE_RULES =
+  "Scrivi in italiano corretto e naturale. Rispondi solo con il testo richiesto: " +
+  "una sola versione, senza introduzioni, commenti, alternative né formattazione markdown.";
+
+const MODES = {
+  email: {
+    label: "Email",
+    topicLabel: "Di cosa parla l'email",
+    topicPlaceholder: "Es. dire a Marco che la riunione di domani slitta alle 15",
+    rules: "Scrivi un'email. Prima riga: \"Oggetto: \" seguito da un oggetto breve. " +
+      "Poi una riga vuota e il testo, con saluto iniziale e firma \"[Nome]\".",
+    subject: true,
+  },
+  reply: {
+    label: "Risposta",
+    sourceLabel: "Email ricevuta",
+    sourcePlaceholder: "Incolla qui l'email a cui rispondere",
+    topicLabel: "Cosa vuoi rispondere",
+    topicPlaceholder: "Es. accetto, ma chiedo di spostare alle 16",
+    rules: "Scrivi la risposta all'email ricevuta seguendo le indicazioni. Prima riga: " +
+      "\"Oggetto: \" seguito da un oggetto breve. Poi una riga vuota e il testo, con saluto " +
+      "iniziale e firma \"[Nome]\".",
+    subject: true,
+  },
+  message: {
+    label: "Messaggio",
+    topicLabel: "Di cosa parla il messaggio",
+    topicPlaceholder: "Es. avvisare il gruppo che stasera arrivo alle 20:30",
+    rules: "Scrivi un messaggio breve da chat, senza oggetto né firma.",
+    subject: false,
+  },
+  fix: {
+    label: "Correggi testo",
+    sourceLabel: "Testo da correggere",
+    sourcePlaceholder: "Incolla qui il testo",
+    topicLabel: "Cosa cambiare (facoltativo)",
+    topicPlaceholder: "Es. rendilo più formale",
+    topicOptional: true,
+    rules: "Correggi grammatica, punteggiatura e chiarezza del testo fornito mantenendone il " +
+      "significato. Restituisci solo il testo corretto.",
+    subject: false,
+    noLength: true,
+  },
+};
+
+const TONES = {
+  cordial: { label: "Cordiale", rule: "Tono cordiale e professionale." },
+  formal: { label: "Formale", rule: "Tono formale: dai del Lei." },
+  casual: { label: "Informale", rule: "Tono informale e amichevole: dai del tu." },
+};
+
+const LENGTHS = {
+  short: { label: "Breve", rule: "Sii breve: poche frasi." },
+  medium: { label: "Media", rule: "Lunghezza media: due o tre paragrafi brevi." },
+};
+
+const PROVIDERS = { lmstudio: "LM Studio", ollama: "Ollama" };
+
+const $ = (id) => document.getElementById(id);
+const els = {
+  form: $("form"), modes: $("modes"), tones: $("tones"), lengths: $("lengths"),
+  sourceField: $("source-field"), sourceLabel: $("source-label"), source: $("source"),
+  topicLabel: $("topic-label"), topic: $("topic"),
+  lengthGroup: $("length-group"),
+  system: $("system"), systemReset: $("system-reset"),
+  temperature: $("temperature"), temperatureOut: $("temperature-out"),
+  maxTokens: $("max-tokens"), maxTokensOut: $("max-tokens-out"),
+  write: $("write"), cancel: $("cancel"), shortcut: $("shortcut"),
+  status: $("status"), statusText: $("status-text"),
+  sheet: $("sheet"), notice: $("notice"),
+  subject: $("subject"), subjectText: $("subject-text"),
+  empty: $("letter-empty"), body: $("letter-body"), meta: $("letter-meta"),
+  letterActions: $("letter-actions"), copy: $("copy"), copySubject: $("copy-subject"),
+  mailto: $("mailto"), rewrite: $("rewrite"),
+  historyList: $("history-list"), historyEmpty: $("history-empty"), historyClear: $("history-clear"),
+};
+
+const state = {
+  customSystem: false,
+  controller: null,
+  timer: null,
+  current: null,
+  ready: false,
+};
+
+/* ---------- storage: per-browser convenience only, never required ---------- */
+function load(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+function save(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    /* private mode or storage blocked: the page works without it */
+  }
+}
+
+/* ---------- controls ---------- */
+function renderChoices(container, name, options, selected) {
+  container.replaceChildren();
+  for (const [value, option] of Object.entries(options)) {
+    const label = document.createElement("label");
+    label.className = "choice";
+    const input = document.createElement("input");
+    input.type = "radio";
+    input.name = name;
+    input.value = value;
+    input.checked = value === selected;
+    const span = document.createElement("span");
+    span.textContent = option.label;
+    label.append(input, span);
+    container.append(label);
+  }
+}
+
+function selected(name) {
+  const input = els.form.querySelector(`input[name="${name}"]:checked`);
+  return input ? input.value : null;
+}
+
+function applyMode() {
+  const mode = MODES[selected("mode")];
+  els.sourceField.hidden = !mode.sourceLabel;
+  els.sourceLabel.textContent = mode.sourceLabel || "";
+  els.source.placeholder = mode.sourcePlaceholder || "";
+  els.topicLabel.textContent = mode.topicLabel;
+  els.topic.placeholder = mode.topicPlaceholder;
+  els.lengthGroup.hidden = Boolean(mode.noLength);
+  refreshSystem();
+}
+
+function buildSystem() {
+  const mode = MODES[selected("mode")];
+  const parts = [BASE_RULES, mode.rules, TONES[selected("tone")].rule];
+  if (!mode.noLength) parts.push(LENGTHS[selected("length")].rule);
+  return parts.join(" ");
+}
+
+function refreshSystem() {
+  if (!state.customSystem) els.system.value = buildSystem();
+}
+
+function buildPrompt() {
+  const modeKey = selected("mode");
+  const mode = MODES[modeKey];
+  const topic = els.topic.value.trim();
+  const source = els.source.value.trim();
+  if (mode.sourceLabel && !source) {
+    return { error: `Manca il campo "${mode.sourceLabel}".`, focus: els.source };
+  }
+  if (!mode.topicOptional && !topic) {
+    return { error: `Scrivi cosa vuoi dire nel campo "${mode.topicLabel}".`, focus: els.topic };
+  }
+  let prompt = topic;
+  if (modeKey === "reply") {
+    prompt = `Email ricevuta:\n"""\n${source}\n"""\n\nCosa voglio rispondere: ${topic}`;
+  } else if (modeKey === "fix") {
+    prompt = `Testo da correggere:\n"""\n${source}\n"""` + (topic ? `\n\nIndicazioni: ${topic}` : "");
+  }
+  if (prompt.length > MAX_PROMPT_CHARS) {
+    return {
+      error: `Il testo è troppo lungo: ${prompt.length} caratteri su ${MAX_PROMPT_CHARS}. Accorcialo e riprova.`,
+      focus: mode.sourceLabel ? els.source : els.topic,
+    };
+  }
+  return { prompt };
+}
+
+function savePrefs() {
+  save(PREFS_KEY, {
+    mode: selected("mode"), tone: selected("tone"), length: selected("length"),
+    temperature: els.temperature.value, maxTokens: els.maxTokens.value,
+  });
+}
+
+/* ---------- health ---------- */
+function setStatus(kind, text) {
+  els.status.dataset.state = kind;
+  els.statusText.textContent = text;
+}
+
+async function checkHealth() {
+  try {
+    const res = await fetch("health", { cache: "no-store" });
+    const data = await res.json();
+    const health = data.detail && typeof data.detail === "object" ? data.detail : data;
+    const where = `${health.model} su ${PROVIDERS[health.provider] || health.provider}`;
+    state.ready = health.status === "ready";
+    switch (health.status) {
+      case "ready":
+        setStatus("ready", `Pronto: ${where}`);
+        break;
+      case "pulling":
+        setStatus("busy", health.pull_progress_percent != null
+          ? `Scarico il modello (${health.pull_progress_percent}%)`
+          : "Scarico il modello");
+        break;
+      case "starting":
+        setStatus("busy", "Avvio in corso");
+        break;
+      case "degraded":
+        setStatus("down", `${PROVIDERS[health.provider] || "Il modello"} non risponde`);
+        break;
+      default:
+        setStatus("down", "Errore del modello: controlla i log del gateway");
+    }
+  } catch {
+    state.ready = false;
+    setStatus("down", "Gateway non raggiungibile");
+  }
+}
+
+/* ---------- generation ---------- */
+function splitSubject(text) {
+  const match = text.match(/^\s*oggetto\s*:\s*(.+)\n+/i);
+  if (!match) return { subject: "", body: text.trim() };
+  return { subject: match[1].trim(), body: text.slice(match[0].length).trim() };
+}
+
+function formatSeconds(ms) {
+  return (ms / 1000).toLocaleString("it-IT", { maximumFractionDigits: 1 }) + " s";
+}
+
+function showNotice(message) {
+  els.notice.textContent = message;
+  els.notice.hidden = !message;
+}
+
+function showLetter(entry) {
+  const { subject, body } = splitSubject(entry.text);
+  state.current = { ...entry, subject, body };
+  els.empty.hidden = true;
+  els.body.hidden = false;
+  els.body.textContent = body || "Il modello ha risposto senza testo. Prova a riscrivere.";
+  els.subject.hidden = !subject;
+  els.subjectText.textContent = subject;
+  els.meta.hidden = false;
+  els.meta.textContent = entry.ms != null
+    ? `Scritto in ${formatSeconds(entry.ms)} da ${entry.model}`
+    : `Scritto da ${entry.model}`;
+  els.letterActions.hidden = false;
+  els.copySubject.hidden = !subject;
+  const isEmail = MODES[entry.mode] && MODES[entry.mode].subject;
+  els.mailto.hidden = !isEmail;
+  if (isEmail) {
+    els.mailto.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  }
+  els.copy.textContent = "Copia il testo";
+  els.copySubject.textContent = "Copia l'oggetto";
+}
+
+function errorMessage(status, data) {
+  const detail = data && data.detail;
+  if (status === 422) {
+    const first = Array.isArray(detail) && detail[0];
+    return `La richiesta non è valida${first ? `: ${first.msg}` : ""}.`;
+  }
+  if (status === 503) return "Il modello non è ancora pronto. Riprova tra qualche secondo.";
+  if (status === 504) return "Il modello non ha risposto in tempo. Prova con una richiesta più breve.";
+  if (status === 502 && typeof detail === "string" && detail.includes("max_tokens")) {
+    return "Il modello ha finito lo spazio prima di rispondere. Aumenta la lunghezza massima nelle opzioni avanzate.";
+  }
+  if (status === 502) return "Il gateway non riesce a parlare con il modello. Controlla lo stato in alto.";
+  return `Errore inatteso dal gateway (HTTP ${status}).`;
+}
+
+function isNarrow() {
+  return window.matchMedia("(max-width: 860px)").matches;
+}
+
+function setWriting(on) {
+  els.write.disabled = on;
+  els.cancel.hidden = !on;
+  els.shortcut.hidden = on;
+  els.sheet.classList.toggle("writing", on);
+  if (on && isNarrow()) {
+    // On a phone the letter sits below the form: bring it into view so the progress shows.
+    els.sheet.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  if (on) {
+    const started = Date.now();
+    els.write.textContent = "Sto scrivendo… 0 s";
+    state.timer = setInterval(() => {
+      els.write.textContent = `Sto scrivendo… ${Math.round((Date.now() - started) / 1000)} s`;
+    }, 1000);
+  } else {
+    clearInterval(state.timer);
+    els.write.textContent = "Scrivi";
+  }
+}
+
+async function write() {
+  if (state.controller) return;
+  const built = buildPrompt();
+  if (built.error) {
+    showNotice(built.error);
+    built.focus.focus();
+    return;
+  }
+  showNotice("");
+  savePrefs();
+
+  const request = {
+    prompt: built.prompt,
+    system: els.system.value.trim() || null,
+    temperature: Number(els.temperature.value),
+    max_tokens: Number(els.maxTokens.value),
+  };
+  const inputs = {
+    mode: selected("mode"), tone: selected("tone"), length: selected("length"),
+    topic: els.topic.value, source: els.source.value,
+  };
+
+  state.controller = new AbortController();
+  setWriting(true);
+  const started = Date.now();
+  try {
+    const res = await fetch("generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+      signal: state.controller.signal,
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      showNotice(errorMessage(res.status, data));
+      if (res.status === 503 || res.status === 502) checkHealth();
+      return;
+    }
+    const entry = {
+      ...inputs,
+      text: data.response,
+      model: data.model,
+      ms: data.total_duration_ms ?? Date.now() - started,
+      at: Date.now(),
+    };
+    showLetter(entry);
+    addToHistory(entry);
+  } catch (err) {
+    if (err.name === "AbortError") {
+      showNotice("Richiesta annullata. Il Raspberry potrebbe finire di scriverla in background e rallentare per qualche secondo la prossima.");
+    } else {
+      showNotice("Il gateway non risponde. Controlla che il Raspberry sia acceso e in rete.");
+      checkHealth();
+    }
+  } finally {
+    state.controller = null;
+    setWriting(false);
+  }
+}
+
+/* ---------- copy: navigator.clipboard needs HTTPS, the gateway is plain HTTP on the LAN ---------- */
+async function copyText(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      /* fall through to the legacy path */
+    }
+  }
+  const area = document.createElement("textarea");
+  area.value = text;
+  area.setAttribute("readonly", "");
+  area.style.position = "fixed";
+  area.style.opacity = "0";
+  document.body.append(area);
+  area.select();
+  let ok = false;
+  try {
+    ok = document.execCommand("copy");
+  } catch {
+    ok = false;
+  }
+  area.remove();
+  return ok;
+}
+
+async function copyInto(button, text, doneLabel) {
+  const ok = await copyText(text);
+  button.textContent = ok ? doneLabel : "Copia non riuscita: seleziona il testo a mano";
+}
+
+/* ---------- history ---------- */
+function formatWhen(ts) {
+  const date = new Date(ts);
+  const today = new Date();
+  const sameDay = date.toDateString() === today.toDateString();
+  return sameDay
+    ? date.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })
+    : date.toLocaleDateString("it-IT", { day: "numeric", month: "short" });
+}
+
+function renderHistory() {
+  const history = load(HISTORY_KEY, []);
+  els.historyList.replaceChildren();
+  for (const entry of history) {
+    const li = document.createElement("li");
+    const button = document.createElement("button");
+    button.type = "button";
+    const { subject, body } = splitSubject(entry.text);
+    const text = document.createElement("span");
+    text.className = "h-text";
+    text.textContent = `${MODES[entry.mode] ? MODES[entry.mode].label : ""}: ${subject || body.split("\n")[0]}`;
+    const when = document.createElement("span");
+    when.className = "h-when";
+    when.textContent = formatWhen(entry.at);
+    button.append(text, when);
+    button.addEventListener("click", () => restore(entry));
+    li.append(button);
+    els.historyList.append(li);
+  }
+  els.historyEmpty.hidden = history.length > 0;
+  els.historyClear.hidden = history.length === 0;
+}
+
+function addToHistory(entry) {
+  const history = load(HISTORY_KEY, []);
+  history.unshift(entry);
+  save(HISTORY_KEY, history.slice(0, HISTORY_SIZE));
+  renderHistory();
+}
+
+function restore(entry) {
+  for (const [name, value] of [["mode", entry.mode], ["tone", entry.tone], ["length", entry.length]]) {
+    const input = els.form.querySelector(`input[name="${name}"][value="${value}"]`);
+    if (input) input.checked = true;
+  }
+  els.topic.value = entry.topic || "";
+  els.source.value = entry.source || "";
+  applyMode();
+  showNotice("");
+  showLetter(entry);
+  if (isNarrow()) els.sheet.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+/* ---------- wiring ---------- */
+function init() {
+  const prefs = load(PREFS_KEY, {});
+  const pick = (options, value, fallback) => (value in options ? value : fallback);
+  renderChoices(els.modes, "mode", MODES, pick(MODES, prefs.mode, "email"));
+  renderChoices(els.tones, "tone", TONES, pick(TONES, prefs.tone, "cordial"));
+  renderChoices(els.lengths, "length", LENGTHS, pick(LENGTHS, prefs.length, "short"));
+  if (prefs.temperature) els.temperature.value = prefs.temperature;
+  if (prefs.maxTokens) els.maxTokens.value = prefs.maxTokens;
+  els.temperatureOut.textContent = Number(els.temperature.value).toLocaleString("it-IT");
+  els.maxTokensOut.textContent = els.maxTokens.value;
+  applyMode();
+
+  els.form.addEventListener("change", (event) => {
+    if (event.target.name === "mode") applyMode();
+    else if (event.target.name === "tone" || event.target.name === "length") refreshSystem();
+  });
+  els.system.addEventListener("input", () => {
+    state.customSystem = els.system.value.trim() !== buildSystem();
+    els.systemReset.hidden = !state.customSystem;
+  });
+  els.systemReset.addEventListener("click", () => {
+    state.customSystem = false;
+    els.systemReset.hidden = true;
+    refreshSystem();
+  });
+  els.temperature.addEventListener("input", () => {
+    els.temperatureOut.textContent = Number(els.temperature.value).toLocaleString("it-IT");
+  });
+  els.maxTokens.addEventListener("input", () => {
+    els.maxTokensOut.textContent = els.maxTokens.value;
+  });
+  els.form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    write();
+  });
+  els.form.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault();
+      write();
+    }
+  });
+  els.cancel.addEventListener("click", () => state.controller && state.controller.abort());
+  els.rewrite.addEventListener("click", write);
+  els.copy.addEventListener("click", () => {
+    if (state.current) copyInto(els.copy, state.current.body, "Testo copiato");
+  });
+  els.copySubject.addEventListener("click", () => {
+    if (state.current) copyInto(els.copySubject, state.current.subject, "Oggetto copiato");
+  });
+  els.historyClear.addEventListener("click", () => {
+    save(HISTORY_KEY, []);
+    renderHistory();
+  });
+
+  renderHistory();
+  checkHealth();
+  setInterval(checkHealth, 15000);
+}
+
+init();
+</script>
+</body>
+</html>

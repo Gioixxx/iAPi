@@ -127,3 +127,17 @@ Registro scelte tecniche con motivazioni.
   token). Senza istruzioni il modello propone 3 versioni dell'email (~200 token, 36 s): il
   `system` deve chiedere una sola email.
 - **Impatto:** `deploy/lmstudio/install-llmster.sh`.
+
+### Interfaccia web servita dal gateway, non come pagina esterna
+- **Data:** 2026-09-24
+- **Decisione:** `GET /` serve `app/web/index.html`, un file unico con CSS e JS inline, senza
+  build né dipendenze esterne. Chiama `generate` e `health` con URL relativi (stessa origine).
+- **Perché:** una pagina ospitata altrove in HTTPS (es. un artifact su claude.ai) non può fare
+  `fetch` verso `http://192.168.1.50` (mixed content) e servirebbe CORS. Servita dal gateway
+  funziona da ogni dispositivo della LAN senza configurazione.
+- **Dettagli che contano:** su `http://` `navigator.clipboard` non esiste (serve un secure
+  context), quindi "Copia" ricade su `document.execCommand("copy")`. Le istruzioni automatiche
+  chiedono sempre una sola versione del testo: senza, gemma ne propone tre e i tempi triplicano.
+  L'output del modello è mostrato con `textContent`, mai come HTML. `Cache-Control: no-cache`
+  perché un aggiornamento di Watchtower si veda al primo reload.
+- **Impatto:** `app/web/index.html`, `app/api/endpoints/ui.py`, `tests/test_ui.py`.

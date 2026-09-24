@@ -14,6 +14,10 @@ deve dipendere da quale dei due ha risposto per primo.
 
 ## Endpoint
 
+- `GET /` — interfaccia web per scrivere email, risposte, messaggi e correzioni: apri
+  `http://192.168.1.50:8000/` da qualsiasi dispositivo della LAN, telefono compreso. È servita dal
+  gateway stesso perché una pagina ospitata altrove in HTTPS non potrebbe chiamare un indirizzo
+  HTTP della LAN. La cronologia resta solo nel browser che la usa.
 - `GET /health` — stato del gateway e del backend. `200` finché il gateway è vivo e il backend
   è raggiungibile (anche durante il download del modello, vedi `status`/`pull_progress_percent`
   nel body); `503` solo se il backend è davvero irraggiungibile. Il body riporta `provider`,
