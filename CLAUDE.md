@@ -4,6 +4,10 @@
 
 <!-- claude-libs:modules:start (auto-generato — modifiche qui vengono rimosse al reconcile; aggiungi i moduli a workspace.json) -->
 @.claude/libs/CLAUDE.md
+@.claude/libs/stacks/fastapi.md
+@.claude/libs/snippets/fastapi-patterns.md
+@.claude/libs/stacks/docker.md
+@.claude/libs/stacks/ai-integration.md
 @.claude/memory/MEMORY.md
 <!-- claude-libs:modules:end -->
 

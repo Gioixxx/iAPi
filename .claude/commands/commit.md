@@ -1,10 +1,14 @@
+---
+triggers: messaggio commit | conventional commit | genera commit
+---
 # /commit — Genera messaggio di commit
 
 ## Input
 `git diff --staged` o `git diff`. `@.claude/memory/conventions.md` per convenzioni commit.
-Se il server MCP `ollama-sidecar` è attivo, chiama `draft_commit_message` con il diff per una
-bozza conventional-commit, poi rifiniscila rispetto a `conventions.md`. Se la risposta include
-`ollama_unavailable: true`, genera il messaggio direttamente dal diff.
+Chiama sempre `draft_commit_message` con il diff per una bozza conventional-commit, prima di
+scriverla tu, poi rifiniscila rispetto a `conventions.md`. Salta solo se il tool non è disponibile
+in sessione o la risposta segnala `ollama_unavailable: true`: in tal caso genera il messaggio
+direttamente dal diff.
 
 ## Regole
 - Solo output — non eseguire commit

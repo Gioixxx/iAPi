@@ -14,7 +14,8 @@ Misura quanto sta cachando il prefisso e quanto pesa il preambolo sempre caricat
 
 - **Cache hit-rate** = `cache_read / (cache_read + cache_creation + input)` sugli ultimi turni. < ~50% su turni ripetuti ⇒ probabile silent-invalidator (vedi `workflows/token-economics.md` §checklist).
 - **Dimensione preambolo**: stima i token di `CLAUDE.md` + globali; segnala il catalogo prosa se ancora inline (candidato a `CATALOG.md`).
-- **Routing**: se la sessione è dominata da task meccanici (sintesi, classificazione, brief), segnala quelli offloadabili su **Ollama sidecar** (locale, gratis; fallback Haiku se offline). Modelli di default in `models.json`.
+- **Routing**: se la sessione è dominata da task meccanici (sintesi, classificazione, brief), segnala quelli offloadabili su **Ollama sidecar** (locale, gratis; fallback Haiku se offline) — la chiamata è policy obbligatoria, non solo un suggerimento (vedi `workflows/token-economics.md`). Modelli di default in `models.json`.
+- **Compliance routing**: leggi `ollama.sidecarCalls`/`ollama.topTool` da `~/.claude/usage-stats-cache.json` (già calcolati da `scripts/statusline/usage-stats.js`, finestra 24h) — se la sessione ha usato flussi come `/commit`/`/handoff`/`/changelog` ma `sidecarCalls` è 0, segnala «policy non rispettata». File assente o Ollama mai probato → non segnalare nulla (nessun dato, non un'anomalia).
 - Non proporre rimozioni dello stack primario o di `workflows/iterative-dev.md`.
 - Niente modifiche: solo report.
 
@@ -24,6 +25,7 @@ Misura quanto sta cachando il prefisso e quanto pesa il preambolo sempre caricat
 2. Stima la dimensione del preambolo fisso (progetto + globali + mode).
 3. Cerca silent-invalidator nel prefisso (date, UUID, JSON non ordinato, set di tool variabile).
 4. Identifica candidati: catalogo inline, moduli ridondanti (`X.md`+`X-reference.md`), task offloadabili su Ollama.
+5. Leggi `~/.claude/usage-stats-cache.json` (se esiste) → campo `ollama.sidecarCalls`/`ollama.topTool` per il riquadro ROUTING.
 
 ## Output
 
@@ -42,6 +44,8 @@ PREAMBOLO FISSO (~token)
 
 ROUTING
   Task meccanici (sintesi/classificazione) → Ollama sidecar  (locale, gratis; fallback Haiku)
+  Chiamate sidecar (24h): 12  (top: draft_commit_message)   ✅ policy rispettata
+  (oppure: ⚠️ 0 chiamate sidecar nelle ultime 24h nonostante /commit in sessione — policy non rispettata)
 
 AZIONI RACCOMANDATE
   1. Sposta il catalogo in CATALOG.md (on-demand) → -1.8k token/sessione

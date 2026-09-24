@@ -10,13 +10,14 @@ Produce un brief compatto e riusabile che riassume lo stato del lavoro corrente,
 - File e directory toccati nella sessione corrente (forniti dall'utente o rilevati dal diff)
 - Contesto conversazione corrente (task completati, decisioni prese, problemi aperti)
 
-## Sidecar Ollama (opzionale)
+## Sidecar Ollama
 
-Se il server MCP `ollama-sidecar` è attivo, chiama il tool `summarize_diff` con l'output di
-`git diff HEAD~1 HEAD` per generare automaticamente la sezione "Completato in questa sessione",
-e `summarize_session` (git log + status + note della sessione) come bozza per le sezioni
-"Problemi aperti / rischi" e "Prossimi passi" — integra la bozza con il contesto conversazione.
-Se il sidecar non è disponibile, genera le sezioni dal log git e dal contesto conversazione.
+Chiama sempre il tool `summarize_diff` con l'output di `git diff HEAD~1 HEAD` per generare
+automaticamente la sezione "Completato in questa sessione", e `summarize_session` (git log +
+status + note della sessione) come bozza per le sezioni "Problemi aperti / rischi" e "Prossimi
+passi" — integra la bozza con il contesto conversazione, prima di scriverle tu. Salta solo se il
+tool non è disponibile in sessione o la risposta segnala `ollama_unavailable: true`: in tal caso
+genera le sezioni dal log git e dal contesto conversazione.
 
 ## Regole
 

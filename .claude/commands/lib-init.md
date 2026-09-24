@@ -1,3 +1,6 @@
+---
+triggers: setup claude-libs | init progetto libs
+---
 # /lib-init — Setup guidato claude-libs nel progetto
 
 Wizard conversazionale per configurare il progetto in modo dichiarativo (`workspace.json` + reconcile).

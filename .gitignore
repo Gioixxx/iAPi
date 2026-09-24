@@ -17,3 +17,7 @@ __pycache__/
 
 # iAPi — deploy secrets (docker-compose.yml/.env.example restano tracciati)
 deploy/.env
+
+.claude/memory/consolidation-report.md
+
+.claude/dashboard.html

@@ -1,3 +1,6 @@
+---
+triggers: ricorda | salva memoria progetto
+---
 # /remember — Salva in memoria progetto
 
 ## Input
