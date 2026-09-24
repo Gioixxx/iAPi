@@ -48,3 +48,48 @@ Registro scelte tecniche con motivazioni.
 - **Alternative:** GitHub Actions con `docker/build-push-action` multi-arch — rimandata, non
   scartata: può essere aggiunta in seguito senza cambiare il Dockerfile.
 - **Impatto:** `README.md` (workflow build/publish), nessun `.github/workflows/`.
+
+### LM Studio affiancato a Ollama, selezione esplicita con `LLM_PROVIDER`
+- **Data:** 2026-09-24
+- **Decisione:** secondo backend `lmstudio` accanto a `ollama` (default invariato), scelto con
+  `LLM_PROVIDER`; nessun auto-detect né fallback a catena. `app/ai/` diviso per provider:
+  `base.py` (errori `LLM*`, `GenerationResult`, `LLMClient` Protocol), `ollama_client.py`,
+  `lmstudio_client.py`, factory `create_llm_client` in `client.py`. Readiness, service e
+  `/health` non conoscono più il provider.
+- **Perché:** l'obiettivo è un modello piccolo che risponda veloce (email e testi brevi). Stessa
+  scelta già fatta in claude-libs: l'auto-detect renderebbe non deterministico quale modello
+  risponde. Il nome del provider resta nei messaggi d'errore per il debug.
+- **Alternative:** colibri (JustVugg/colibri) — scartato: solo modelli MoE enormi con streaming
+  degli esperti da NVMe, niente modelli densi, nessun binario arm64, una richiesta alla volta.
+- **Impatto:** `app/ai/*`, `app/core/{config,readiness}.py`, `app/api/deps.py`,
+  `app/schemas/health.py`, `deploy/`. `/health` guadagna `provider`/`llm_reachable`;
+  `ollama_reachable` resta come alias deprecato. `/generate` guadagna `system` opzionale.
+
+### LM Studio: `/v1` per generare, REST nativa `/api/v1` per presenza e download
+- **Data:** 2026-09-24
+- **Decisione:** generazione su `POST /v1/chat/completions`; presenza del modello su
+  `GET /api/v1/models` (match su `key` o `variants`); download automatico con
+  `POST /api/v1/models/download` + polling di `/api/v1/models/download/status/{job_id}`.
+  Richiede LM Studio/llmster >= 0.4.0.
+- **Perché:** la superficie OpenAI non ha né download né un elenco affidabile dei modelli
+  scaricati (`/v1/models` li elenca solo con il JIT loading attivo). Il download automatico
+  mantiene la parità col pull self-healing di Ollama.
+- **Verificato sul server reale (LM Studio locale, `qwen3-0.6b`):**
+  - `reasoning_effort: "none"` azzera i token di reasoning: risposta email da 5,8 s a 1,6 s → è
+    il default di `LMSTUDIO_REASONING_EFFORT`. Con reasoning attivo e `max_tokens` basso
+    `content` torna `""` con `finish_reason: "length"` → `LLMEmptyResponseError` → 502 esplicito
+    invece di una risposta vuota con 200.
+  - Con un solo modello caricato, un `model` inesistente viene servito **in silenzio** dal
+    modello caricato (200). Senza modelli caricati: 400 con `error.param == "model"` →
+    `LLMModelMissingError`. Download di una chiave inesistente: 404 `model_not_found`.
+- **Impatto:** `app/ai/lmstudio_client.py`, `tests/test_lmstudio_client.py`.
+
+### LM Studio fuori dal compose
+- **Data:** 2026-09-24
+- **Decisione:** il compose non contiene LM Studio; `iapi` lo raggiunge via `LMSTUDIO_BASE_URL`
+  (default `http://host.docker.internal:1234`, con `extra_hosts: host-gateway`). Il container
+  Ollama resta nel compose come fallback.
+- **Perché:** l'immagine ufficiale `lmstudio/llmster-preview` è solo x86 e CPU; l'unica arm64 è
+  di terze parti. Installato sull'host del Pi (`install.sh`) o su un'altra macchina in LAN.
+- **Impatto:** `deploy/docker-compose.yml`, `deploy/.env.example`. Esposizione del server LM
+  Studio in [[tech-debt]].

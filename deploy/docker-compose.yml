@@ -21,10 +21,19 @@ services:
       ollama:
         condition: service_healthy
     environment:
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
       OLLAMA_BASE_URL: http://ollama:11434
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:3b}
+      LMSTUDIO_BASE_URL: ${LMSTUDIO_BASE_URL:-http://host.docker.internal:1234}
+      LMSTUDIO_MODEL: ${LMSTUDIO_MODEL:-google/gemma-4-e2b}
+      LMSTUDIO_API_TOKEN: ${LMSTUDIO_API_TOKEN:-}
+      LMSTUDIO_REASONING_EFFORT: ${LMSTUDIO_REASONING_EFFORT-none}
       OLLAMA_REQUEST_TIMEOUT_SECONDS: ${OLLAMA_REQUEST_TIMEOUT_SECONDS:-120}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    # LM Studio (llmster) non ha un'immagine ufficiale arm64: gira sull'host del Pi o su
+    # un'altra macchina in LAN. host.docker.internal risolve all'host anche su Linux.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${IAPI_PORT:-8000}:8000"
     healthcheck:

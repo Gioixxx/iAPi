@@ -1,13 +1,17 @@
 from fastapi import Depends, Header, Request
 
-from app.ai.client import OllamaClient
+from app.ai.base import LLMClient
 from app.ai.services.generate_service import GenerateService
-from app.core.config import settings
+from app.core.config import Settings, settings
 from app.core.readiness import ModelReadiness
 
 
-def get_ollama_client(request: Request) -> OllamaClient:
-    return request.app.state.ollama_client
+def get_settings() -> Settings:
+    return settings
+
+
+def get_llm_client(request: Request) -> LLMClient:
+    return request.app.state.llm_client
 
 
 def get_readiness(request: Request) -> ModelReadiness:
@@ -15,10 +19,11 @@ def get_readiness(request: Request) -> ModelReadiness:
 
 
 def get_generate_service(
-    client: OllamaClient = Depends(get_ollama_client),
+    client: LLMClient = Depends(get_llm_client),
     readiness: ModelReadiness = Depends(get_readiness),
+    app_settings: Settings = Depends(get_settings),
 ) -> GenerateService:
-    return GenerateService(client, settings, readiness)
+    return GenerateService(client, app_settings, readiness)
 
 
 async def get_optional_api_key(x_api_key: str | None = Header(default=None)) -> None:

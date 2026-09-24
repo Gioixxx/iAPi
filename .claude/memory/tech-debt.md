@@ -57,10 +57,35 @@ Registro debito tecnico con priorità. Aggiornato da /session-end. Origine spess
 - **Impatto:** minimo — si nota solo se serve una feature/fix di una versione più recente.
 - **Risoluzione:** aggiornare `OLLAMA_IMAGE_TAG` in `deploy/.env` a mano quando serve.
 
+### LM Studio sul Pi va esposto oltre localhost
+- **Priorità:** Media
+- **Area:** deploy (LM Studio / llmster sull'host)
+- **Data:** 2026-09-24
+- **Descrizione:** perché il container `iapi` raggiunga llmster sull'host, il server deve
+  ascoltare oltre `127.0.0.1`; su `0.0.0.0` è visibile a tutta la LAN, il che rompe il principio
+  "solo il gateway è esposto" valido per Ollama.
+- **Perché rimandato:** dipende da dove girerà LM Studio (host del Pi o altra macchina), non
+  ancora deciso.
+- **Impatto:** chiunque in LAN può usare LM Studio direttamente, scavalcando il gateway.
+- **Risoluzione:** autenticazione di LM Studio attiva + `LMSTUDIO_API_TOKEN`, oppure bind sul
+  solo IP del bridge Docker, oppure `network_mode: host` per `iapi`.
+
+### `reasoning_effort: "none"` non è rispettato da tutti i modelli su `/v1`
+- **Priorità:** Bassa
+- **Area:** app/ai/lmstudio_client.py
+- **Data:** 2026-09-24
+- **Descrizione:** bug noti di LM Studio (lmstudio-bug-tracker #988, #2413) su alcuni modelli
+  ignorano il campo sull'endpoint OpenAI-compatibile; funziona sulla REST nativa `/api/v1/chat`.
+- **Perché rimandato:** verificato funzionante su qwen3-0.6b; gemma-4-e2b non ancora provato.
+- **Impatto:** risposte più lente e, con `max_tokens` basso, 502 da reasoning che consuma il budget.
+- **Risoluzione:** se succede col modello scelto, passare la generazione a `/api/v1/chat` con
+  reasoning off, lasciando invariato il resto del client.
+
 ## Priorità
 - **Alta:** —
-- **Media:** nessuna auth su /generate e /health
-- **Bassa:** niente CI/CD, no streaming, `--workers 1`, tag Ollama pinnato a mano
+- **Media:** nessuna auth su /generate e /health, LM Studio esposto oltre localhost
+- **Bassa:** niente CI/CD, no streaming, `--workers 1`, tag Ollama pinnato a mano,
+  `reasoning_effort` ignorato da alcuni modelli
 
 ## Archiviato
 - [item risolti]

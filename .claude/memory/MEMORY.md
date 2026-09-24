@@ -1,20 +1,20 @@
 ---
 type: memory
 tags: [memory, index]
-updated: [2026-07-16]
+updated: [2026-09-24]
 ---
 
-# iAPi — FastAPI + Ollama (Raspberry Pi 5)
+# iAPi — FastAPI + LLM locale (Raspberry Pi 5)
 > Contesto persistente. Aggiornato da /remember. Vault Obsidian: vedi workflows/obsidian-vault.md.
 
-**Stack:** Python 3.12 / FastAPI / httpx / Ollama / Docker (arm64)  **Sprint:** v1 gateway + deploy su Pi  **Aggiornamento:** 2026-07-16
+**Stack:** Python 3.12 / FastAPI / httpx / Ollama + LM Studio / Docker (arm64)  **Sprint:** provider LM Studio  **Aggiornamento:** 2026-09-24
 
 ## Contesto
-Gateway FastAPI davanti a Ollama, deployato su un Raspberry Pi 5 (CasaOS) via l'MCP `pi-deploy`,
-per esporre inferenza IA (`llama3.2:3b`) agli altri container Docker in LAN. Codice applicativo
-scaffoldato e testato localmente (pytest + docker build); build/publish GHCR e deploy reale sul
-Pi ancora da eseguire (richiedono credenziali/conferma dell'utente). Vedi [[decisions]] per il
-dettaglio delle scelte architetturali.
+Gateway FastAPI davanti a un backend LLM locale, deployato su un Raspberry Pi 5 (CasaOS) via
+l'MCP `pi-deploy`, per dare agli altri container Docker in LAN un modello piccolo e veloce
+(email, testi brevi). v1 (Ollama, `llama3.2:3b`) live e verificato dal 2026-07-16. Dal
+2026-09-24 c'è anche il provider LM Studio (`LLM_PROVIDER=lmstudio`), non ancora deployato: resta
+da decidere dove far girare llmster. Vedi [[decisions]] per il dettaglio delle scelte.
 
 ## File memoria (carica su richiesta)
 > `@file.md` = import Claude · `[[file]]` = wikilink Obsidian (graph). Tieni entrambi.

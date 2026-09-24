@@ -7,7 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from app.ai.client import OllamaClient
+from app.ai.client import create_llm_client
 from app.api.router import api_router
 from app.core.config import settings
 from app.core.logging import configure_logging
@@ -19,14 +19,11 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    client = OllamaClient(
-        base_url=settings.ollama_base_url,
-        connect_timeout=settings.ollama_connect_timeout_seconds,
-        request_timeout=settings.ollama_request_timeout_seconds,
-    )
+    client = create_llm_client(settings)
     readiness = ModelReadiness()
-    app.state.ollama_client = client
+    app.state.llm_client = client
     app.state.readiness = readiness
+    logger.info("LLM provider: %s, model: %s", settings.llm_provider, settings.llm_model)
 
     bootstrap_task = asyncio.create_task(bootstrap_model(client, settings, readiness))
     try:
