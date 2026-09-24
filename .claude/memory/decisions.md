@@ -91,5 +91,22 @@ Registro scelte tecniche con motivazioni.
   Ollama resta nel compose come fallback.
 - **Perché:** l'immagine ufficiale `lmstudio/llmster-preview` è solo x86 e CPU; l'unica arm64 è
   di terze parti. Installato sull'host del Pi (`install.sh`) o su un'altra macchina in LAN.
-- **Impatto:** `deploy/docker-compose.yml`, `deploy/.env.example`. Esposizione del server LM
-  Studio in [[tech-debt]].
+- **Impatto:** `deploy/docker-compose.yml`, `deploy/.env.example`.
+
+### llmster sul Pi in ascolto solo su `docker0`, non su `0.0.0.0` con token
+- **Data:** 2026-09-24
+- **Decisione:** LM Studio gira sull'host del Pi come unit systemd (`lmstudio.service`, creata da
+  `deploy/lmstudio/install-llmster.sh`) con `lms server start --bind <IP di docker0>`. Il modello
+  è caricato all'avvio (`lms load --context-length 8192`), quindi resta sempre in memoria.
+- **Perché:** in headless LM Studio non permette di creare token API (solo dalla GUI), quindi
+  "`0.0.0.0` + token" non è praticabile. `host.docker.internal:host-gateway` risolve proprio
+  all'IP di `docker0`: i container ci arrivano via INPUT dell'host, la LAN no. Mantiene il
+  principio "solo il gateway è esposto" già valido per Ollama.
+- **Alternative:** `network_mode: host` per `iapi` — scartata: Ollama non avrebbe più il DNS di
+  servizio e andrebbe pubblicato su `127.0.0.1`, cambio più invasivo. Immagine arm64 di terze
+  parti nel compose — scartata per la supply chain.
+- **Conseguenze note:** la unit ha `After=docker.service` perché `docker0` deve esistere al bind;
+  se l'IP di `docker0` cambiasse (es. `bip` in `daemon.json`) va rieseguito lo script. Il Pi non
+  è raggiungibile via SSH da Claude Code (solo tramite l'MCP `pi-deploy`, che non esegue comandi
+  arbitrari): lo script lo lancia l'utente.
+- **Impatto:** `deploy/lmstudio/install-llmster.sh`, `.gitattributes` (`*.sh` in LF).

@@ -8,10 +8,19 @@ updated: [2026-07-16]
 Stato lavoro in corso. Aggiornato con /sprint. Backlog in [[backlog]], debito in [[tech-debt]].
 
 ## Sprint attivo
-- **Nome/Numero:** nessuno — v1 chiuso, in attesa del prossimo obiettivo
+- **Nome/Numero:** v0.2 — provider LM Studio sul Pi
+- **Periodo:** 2026-09-24 →
+- **Obiettivo:** modello piccolo che risponda veloce a email e testi brevi, servito da LM Studio
+  (llmster) sull'host del Pi, con Ollama come fallback.
 
 ## Task
-- [ ] [nessun task in corso]
+- [x] Provider `lmstudio` accanto a `ollama` (`LLM_PROVIDER`), campo `system` su `/generate`,
+  verificato contro LM Studio reale in locale — commit `08a31b7`
+- [x] Script `deploy/lmstudio/install-llmster.sh` + README con la sequenza di deploy
+- [ ] Eseguire lo script sul Pi (utente, via SSH) — riportare la RAM del Pi
+- [ ] Build + push `ghcr.io/gioixxx/iapi:0.2.0`/`:latest` (serve Docker Desktop attivo)
+- [ ] `deploy_app` con `LLM_PROVIDER=lmstudio` e verifica `/health` + `/generate`
+- [ ] Verificare che gemma-4-e2b rispetti `reasoning_effort: none` (vedi [[tech-debt]])
 
 ## Storico
 ### v1 — Gateway FastAPI + Ollama su Raspberry Pi 5

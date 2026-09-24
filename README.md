@@ -33,17 +33,18 @@ via `/api/pull`, con LM Studio via `/api/v1/models/download`. Nessuno step manua
 ## LM Studio
 
 - **Dove gira:** non esiste un'immagine Docker ufficiale arm64 di llmster, quindi LM Studio
-  non sta nel compose. Può girare sull'host del Pi (`curl -fsSL https://lmstudio.ai/install.sh |
-  bash`, poi `lms daemon up` e `lms server start`) oppure su un'altra macchina della LAN;
-  `LMSTUDIO_BASE_URL` punta a lui. Il container `iapi` risolve `host.docker.internal` all'host
-  anche su Linux (`extra_hosts: host-gateway`).
-- **Esposizione:** perché il container lo raggiunga, il server deve ascoltare oltre `localhost`.
-  Se ascolta su `0.0.0.0` è visibile a tutta la LAN: abilita l'autenticazione in LM Studio e
-  imposta lo stesso token in `LMSTUDIO_API_TOKEN`.
+  non sta nel compose: gira sull'host del Pi come servizio systemd, installato da
+  `deploy/lmstudio/install-llmster.sh` (vedi [Deploy](#deploy)). Il container `iapi` lo
+  raggiunge via `host.docker.internal` (`extra_hosts: host-gateway`), che su Linux risolve
+  all'IP del bridge `docker0`.
+- **Esposizione:** il server ascolta **solo** sull'IP di `docker0`: i container del Pi lo
+  raggiungono, la LAN no. In modalità headless LM Studio non permette di creare token API
+  (solo dalla GUI), quindi l'isolamento passa dal bind. `LMSTUDIO_API_TOKEN` serve solo se
+  LM Studio gira su un'altra macchina con l'autenticazione attivata dalla GUI.
 - **Velocità:** `LMSTUDIO_REASONING_EFFORT=none` (default) spegne il "thinking" dei modelli che
   lo hanno attivo di default, come gemma-4 e qwen3 — misurato 3,6× più veloce su una risposta
-  di lunghezza email. Il primo `/generate` dopo un periodo di inattività include il caricamento
-  del modello in memoria (JIT di LM Studio); le richieste successive no.
+  di lunghezza email. Il servizio systemd carica il modello all'avvio e lo tiene in memoria, così
+  nessuna richiesta paga il caricamento.
 - **Modello sostituito:** se è caricato un solo modello, LM Studio risponde con quello anche
   quando la richiesta ne nomina un altro. Il gateway blocca `/generate` finché il modello
   configurato non risulta scaricato, e il campo `model` della risposta riporta sempre quello
@@ -97,7 +98,7 @@ docker buildx create --name iapi-builder --use
 docker buildx inspect --bootstrap
 docker login ghcr.io -u gioixxx
 
-$Version = "0.1.0"
+$Version = "0.2.0"
 docker buildx build `
   --platform linux/arm64 `
   --tag "ghcr.io/gioixxx/iapi:$Version" `
@@ -119,3 +120,28 @@ deploy_app("iapi", "C:\Dev\iAPi\deploy", enable_watchtower=True)
 Watchtower (auto-generato al primo deploy) rileva i nuovi push su `:latest` e aggiorna i
 container senza bisogno di un redeploy manuale. Il container Ollama resta nel compose anche con
 `LLM_PROVIDER=lmstudio`: è il fallback, e tornare indietro è solo un cambio di variabile.
+
+### Con LM Studio sull'host del Pi
+
+L'ordine conta: il gateway con `LLM_PROVIDER=lmstudio` resta `degraded` finché LM Studio non
+risponde.
+
+1. **LM Studio sul Pi** (una volta; rieseguibile). `deploy_app` sincronizza solo i file compose e
+   `.env*`, quindi lo script va copiato a mano:
+
+   ```bash
+   scp deploy/lmstudio/install-llmster.sh gioixxx@192.168.1.50:~
+   ssh -t gioixxx@192.168.1.50 'bash ~/install-llmster.sh'
+   ```
+
+   Installa llmster, scarica `google/gemma-4-e2b`, crea la unit `lmstudio.service` (avvio al
+   boot, modello caricato con contesto 8192, bind su `docker0`) e verifica che il container
+   `iapi-gateway` lo raggiunga. `sudo` chiede la password per la unit.
+2. **Immagine** `0.2.0` + `:latest` con il comando della sezione precedente. Watchtower aggiorna
+   subito il gateway in esecuzione, che però continua a usare Ollama: la configurazione sul Pi
+   non è ancora cambiata.
+3. **Configurazione:** `LLM_PROVIDER=lmstudio` in `deploy/.env`, poi
+   `deploy_app("iapi", "C:\Dev\iAPi\deploy")`, che porta sul Pi il compose nuovo (`extra_hosts`,
+   variabili `LMSTUDIO_*`) e ricrea il container.
+4. **Verifica:** `GET /health` → `provider: lmstudio`, `status: ready`; poi una `/generate` con
+   `system`. Per tornare a Ollama: `LLM_PROVIDER=ollama` e di nuovo `deploy_app`.

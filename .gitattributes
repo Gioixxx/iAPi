@@ -1,0 +1,3 @@
+# Gli script che girano sul Pi devono restare LF anche con core.autocrlf=true su Windows:
+# con CRLF bash fallisce su "$'\r': command not found".
+*.sh text eol=lf
