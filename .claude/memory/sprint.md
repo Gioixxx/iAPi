@@ -19,7 +19,7 @@ Stato lavoro in corso. Aggiornato con /sprint. Backlog in [[backlog]], debito in
 - [x] Script `deploy/lmstudio/install-llmster.sh` + README con la sequenza di deploy
 - [x] llmster sul Pi: installato, gemma-4-e2b scaricato (Pi da 8 GB). Due fallimenti da
   ETXTBSY risolti con un retry (`3c82f34`) — vedi [[decisions]]
-- [ ] Rilanciare `install-llmster.sh` (utente, per `sudo`) per installare la unit corretta
+- [x] Unit `lmstudio.service` installata e attiva (enabled, riparte al boot), gateway `ready`
 - [x] Build + push `ghcr.io/gioixxx/iapi:0.2.0`/`:latest`
 - [x] `deploy_app` con `LLM_PROVIDER=lmstudio`: `/health` ready, email in 6-7 s a caldo
 - [ ] Immagine con il log di raggiungibilità (`4d64e0f`), non ancora pubblicata
