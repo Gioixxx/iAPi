@@ -18,6 +18,7 @@ PORT="${LMSTUDIO_PORT:-1234}"
 CONTEXT_LENGTH="${LMSTUDIO_CONTEXT_LENGTH:-8192}"
 LMS="$HOME/.lmstudio/bin/lms"
 UNIT=/etc/systemd/system/lmstudio.service
+START_SCRIPT=/usr/local/bin/iapi-lmstudio-start
 RUN_AS="$(id -un)"
 
 if [ "$(id -u)" -eq 0 ]; then
@@ -56,12 +57,46 @@ if [ ! -x "$LMS" ]; then
   exit 1
 fi
 
+# A ogni avvio llmster riscrive $LMS: eseguirlo in quell'istante fallisce con "Text file busy"
+# (ETXTBSY). Stesso retry dello script di avvio generato più sotto.
+retry() {
+  for _ in $(seq 1 30); do
+    "$@" && return 0
+    sleep 2
+  done
+  echo "fallito dopo 30 tentativi: $*" >&2
+  return 1
+}
+
 echo "== Download del modello $MODEL"
-"$LMS" daemon up
-"$LMS" get "$MODEL" --yes
+retry "$LMS" daemon up
+retry "$LMS" get "$MODEL" --yes
 # Il daemon avviato qui è fuori dal cgroup del servizio: lo si ferma perché sia systemd a
 # possederlo, così stop/restart della unit lo gestiscono davvero.
-"$LMS" daemon down
+retry "$LMS" daemon down
+
+echo "== Script di avvio $START_SCRIPT"
+sudo tee "$START_SCRIPT" >/dev/null <<EOF
+#!/usr/bin/env bash
+# Avviato da lmstudio.service, generato da install-llmster.sh di iAPi: non modificare a mano.
+set -euo pipefail
+
+# A ogni avvio llmster riscrive $LMS: eseguirlo in quell'istante fallisce con
+# "Text file busy" (ETXTBSY). Ogni comando si riprova finché il file non è di nuovo stabile.
+retry() {
+  for _ in \$(seq 1 30); do
+    "\$@" && return 0
+    sleep 2
+  done
+  echo "fallito dopo 30 tentativi: \$*" >&2
+  return 1
+}
+
+retry "$LMS" daemon up
+retry "$LMS" load "$MODEL" --context-length "$CONTEXT_LENGTH" --yes
+retry "$LMS" server start --bind "$BIND_IP" --port "$PORT"
+EOF
+sudo chmod 755 "$START_SCRIPT"
 
 echo "== Unit systemd $UNIT"
 sudo tee "$UNIT" >/dev/null <<EOF
@@ -75,10 +110,9 @@ Type=oneshot
 RemainAfterExit=yes
 User=$RUN_AS
 Environment="HOME=$HOME"
-ExecStartPre=$LMS daemon up
-ExecStartPre=$LMS load $MODEL --context-length $CONTEXT_LENGTH --yes
-ExecStart=$LMS server start --bind $BIND_IP --port $PORT
+ExecStart=$START_SCRIPT
 ExecStop=$LMS daemon down
+TimeoutStartSec=300
 
 [Install]
 WantedBy=multi-user.target
