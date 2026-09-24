@@ -1,5 +1,6 @@
 import asyncio
 
+import httpx
 import respx
 from httpx import Response
 
@@ -52,3 +53,24 @@ async def test_bootstrap_unreachable_backend_is_degraded(lmstudio_client):
             await asyncio.gather(task, return_exceptions=True)
 
     assert readiness.llm_reachable is False
+
+
+async def test_bootstrap_logs_why_backend_is_unreachable_once(lmstudio_client, caplog):
+    settings = make_settings(llm_provider="lmstudio", pull_retry_backoff_seconds=0)
+    readiness = ModelReadiness()
+
+    with respx.mock:
+        route = respx.get(f"{LMSTUDIO_BASE_URL}/api/v1/models").mock(
+            side_effect=httpx.ConnectError("All connection attempts failed")
+        )
+        task = asyncio.create_task(bootstrap_model(lmstudio_client, settings, readiness))
+        try:
+            await _wait_for(lambda: route.call_count >= 3)
+        finally:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+
+    warnings = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+    assert warnings == [
+        f"lmstudio unreachable at {LMSTUDIO_BASE_URL}: ConnectError: All connection attempts failed"
+    ]

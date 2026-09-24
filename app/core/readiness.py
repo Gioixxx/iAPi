@@ -19,6 +19,12 @@ class ModelReadiness:
     pull_progress_percent: int | None = None
 
 
+def _backend_url(settings: Settings) -> str:
+    if settings.llm_provider == "lmstudio":
+        return settings.lmstudio_base_url
+    return settings.ollama_base_url
+
+
 async def bootstrap_model(client: LLMClient, settings: Settings, readiness: ModelReadiness) -> None:
     """Runs forever as a background task started from the FastAPI lifespan. Never blocks
     startup: `docker compose up -d` must return quickly regardless of how long the model
@@ -47,7 +53,17 @@ async def bootstrap_model(client: LLMClient, settings: Settings, readiness: Mode
             readiness.status = "ready"
             readiness.model_present = True
             readiness.pull_progress_percent = None
-        except (LLMUnavailableError, LLMTimeoutError):
+        except (LLMUnavailableError, LLMTimeoutError) as exc:
+            # Logged on the transition only: an unreachable backend retries every
+            # pull_retry_backoff_seconds and would otherwise flood the log.
+            if readiness.status != "degraded":
+                logger.warning(
+                    "%s unreachable at %s: %s: %s",
+                    settings.llm_provider,
+                    _backend_url(settings),
+                    type(exc.__cause__ or exc).__name__,
+                    exc,
+                )
             readiness.status = "degraded"
             readiness.llm_reachable = False
             await asyncio.sleep(settings.pull_retry_backoff_seconds)
